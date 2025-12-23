@@ -76,11 +76,11 @@
       // 背景先清掉
       ctx.clearRect(0,0,W,H);
 
-      // 1) 先畫使用者照片到右邊相框區
-      drawCover(photoImg, PHOTO_RECT);
+       // ✅ 1) 先畫模板
+  ctx.drawImage(templateImg, 0, 0, W, H);
 
-      // 2) 再把 Canva 模板蓋上去（框、膠帶、文字、裝飾都在模板裡）
-      ctx.drawImage(templateImg, 0, 0, W, H);
+  // ✅ 2) 再畫照片（避免被白色相紙蓋住）
+  drawCover(photoImg, PHOTO_RECT);
 
       // 3) 匯出
       const blob = await new Promise(r=>canvas.toBlob(r,'image/png',1.0));
@@ -91,3 +91,4 @@
   </script>
 </body>
 </html>
+
