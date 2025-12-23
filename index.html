@@ -70,13 +70,37 @@ const PHOTO_RECT = {
       ctx.drawImage(img, sx, sy, sw, sh, rect.x, rect.y, rect.w, rect.h);
     }
 
-    fileEl.addEventListener('change', async (e)=>{
-      const f = e.target.files?.[0];
-      if(!f) return;
-      const url = URL.createObjectURL(f);
-      photoImg = await loadImg(url);
-      alert('已取得照片，按「生成卡片」');
-    });
+   fileEl.addEventListener('change', async (e)=>{
+  const f = e.target.files?.[0];
+  if(!f) return;
+
+  const url = URL.createObjectURL(f);
+  photoImg = await loadImg(url);
+
+  // ✅ 拍完立刻生成並跳下載
+  await renderAndPrepareDownload();
+});
+    
+async function renderAndPrepareDownload() {
+  if (!photoImg) return;
+  if (!templateImg) templateImg = await loadImg(TEMPLATE_SRC);
+
+  ctx.clearRect(0, 0, W, H);
+
+  // 先畫模板、再畫照片（你目前已改成這個順序）
+  ctx.drawImage(templateImg, 0, 0, W, H);
+  drawCover(photoImg, PHOTO_RECT);
+
+  // 匯出
+  const blob = await new Promise(r => canvas.toBlob(r, 'image/png', 1.0));
+  const outUrl = URL.createObjectURL(blob);
+
+  dl.href = outUrl;
+  dl.style.display = 'inline-block';
+
+  // ✅ 直接觸發下載（不必再按一次）
+  dl.click();
+}
 
     btn.addEventListener('click', async ()=>{
       if(!photoImg) { alert('請先拍照/選照片'); return; }
@@ -100,6 +124,7 @@ const PHOTO_RECT = {
   </script>
 </body>
 </html>
+
 
 
 
