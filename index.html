@@ -2,129 +2,188 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>拍照套版</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>拍照後自動放入模板</title>
   <style>
-    body{font-family:system-ui,-apple-system,Segoe UI,Arial;margin:16px}
-    canvas{width:100%;max-width:420px;border:1px solid #ddd;border-radius:12px}
-    .row{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
-    button,a{padding:10px 14px;border-radius:10px;border:1px solid #ddd;background:#fff}
+    body{
+      font-family: system-ui,-apple-system,Segoe UI,Arial;
+      margin: 16px;
+      background:#fafafa;
+      color:#111;
+    }
+    .wrap{
+      max-width: 520px;
+      margin: 0 auto;
+      background:#fff;
+      border:1px solid #e6e6e6;
+      border-radius:16px;
+      padding:14px;
+      box-shadow: 0 10px 35px rgba(0,0,0,.06);
+    }
+    h2{ margin:6px 0 10px; font-size:18px; }
+    .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin:10px 0; }
+    input[type="file"]{
+      width: 100%;
+      padding: 10px;
+      border: 1px dashed #cfcfcf;
+      border-radius: 12px;
+      background: #fff;
+    }
+    button, a.btn{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      padding: 11px 14px;
+      border-radius: 12px;
+      border: 1px solid #ddd;
+      background: #fff;
+      cursor: pointer;
+      text-decoration:none;
+      color:#111;
+    }
+    button.primary{
+      background:#111;
+      border-color:#111;
+      color:#fff;
+    }
+    button:disabled{ opacity:.45; cursor:not-allowed; }
+    canvas{
+      width: 100%;
+      border-radius: 14px;
+      border: 1px solid #eee;
+      background:#f6f6f6;
+      margin-top: 10px;
+    }
+    .hint{ font-size:12px; color:#666; line-height:1.5; margin-top:8px; }
   </style>
 </head>
+
 <body>
-  <h3>拍照後自動放入模板</h3>
+  <div class="wrap">
+    <h2>拍照後自動放入模板</h2>
 
-  <!-- capture=environment 會優先用後鏡頭（多數手機） -->
-  <input id="file" type="file" accept="image/*" capture="environment" />
+    <!-- capture=environment：手機通常會優先開後鏡頭 -->
+    <input id="file" type="file" accept="image/*" capture="environment" />
 
-  <div class="row">
-    <button id="make">生成卡片</button>
-    <a id="dl" download="card.png" style="display:none">下載卡片</a>
+    <div class="row">
+      <button id="make" class="primary" disabled>生成卡片</button>
+      <a id="dl" class="btn" download="card.png" style="display:none;">下載卡片</a>
+    </div>
+
+    <canvas id="c"></canvas>
+
+    <div class="hint">
+      模板檔名固定為 <b>template.png</b>（放在同一層）。<br/>
+      這份程式會自動依 template.png 的實際尺寸設定畫布，避免照片跑位。
+    </div>
   </div>
 
-  <canvas id="c"></canvas>
-
   <script>
-    const W = 1080, H = 1920;
-    const TEMPLATE_SRC = "./template.png"; // Canva 匯出的模板圖
+    // === 固定模板檔名（放在 repo 根目錄同一層）===
+    const TEMPLATE_SRC = "./template.png";
 
-    // ✅ 這裡就是「右邊相框」的位置（你要依你的設計調整）
-    // 例：相片貼在右邊的框內（x,y,w,h）
+    // ✅ 你這張綠底模板（1080×1350）「白色內框」區域（保守版）
+    // 若你換了模板，通常只要改這四個數字
+    const PHOTO_RECT = { x: 205, y: 391, w: 674, h: 550 };
 
+    const fileEl = document.getElementById("file");
+    const btn = document.getElementById("make");
+    const dl = document.getElementById("dl");
+    const canvas = document.getElementById("c");
+    const ctx = canvas.getContext("2d");
 
+    let templateImg = null;   // HTMLImageElement
+    let photoSource = null;   // ImageBitmap 或 HTMLImageElement
+    let W = 1080, H = 1350;   // 會在載入 template 後覆蓋
 
-    
-const PHOTO_RECT = {
-  x: 140,
-  y: 360,
-  w: 480,
-  h: 820
-}; // <-- 先用示例值
-
-    const fileEl = document.getElementById('file');
-    const btn = document.getElementById('make');
-    const dl = document.getElementById('dl');
-    const canvas = document.getElementById('c');
-    const ctx = canvas.getContext('2d');
-    canvas.width = W; canvas.height = H;
-
-    let photoImg = null;
-    let templateImg = null;
-
-    function loadImg(src){
-      return new Promise((res, rej)=>{
-        const i = new Image();
-        i.crossOrigin = "anonymous";
-        i.onload = ()=>res(i);
-        i.onerror = rej;
-        i.src = src;
+    function loadImg(src) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.onload = () => resolve(img);
+        img.onerror = reject;
+        img.src = src;
       });
     }
 
-    // cover：等比例填滿 rect，裁切多餘
-    function drawCover(img, rect){
-      const iw = img.naturalWidth, ih = img.naturalHeight;
-      const scale = Math.max(rect.w/iw, rect.h/ih);
-      const sw = rect.w/scale, sh = rect.h/scale;
-      const sx = (iw - sw)/2, sy = (ih - sh)/2;
-      ctx.drawImage(img, sx, sy, sw, sh, rect.x, rect.y, rect.w, rect.h);
+    // cover：等比例填滿 rect，多餘裁切
+    function drawCover(source, rect) {
+      // source 可以是 ImageBitmap 或 HTMLImageElement
+      const iw = source.width || source.naturalWidth;
+      const ih = source.height || source.naturalHeight;
+
+      const scale = Math.max(rect.w / iw, rect.h / ih);
+      const sw = rect.w / scale;
+      const sh = rect.h / scale;
+      const sx = (iw - sw) / 2;
+      const sy = (ih - sh) / 2;
+
+      ctx.drawImage(source, sx, sy, sw, sh, rect.x, rect.y, rect.w, rect.h);
     }
 
-   fileEl.addEventListener('change', async (e)=>{
-  const f = e.target.files?.[0];
-  if(!f) return;
+    async function ensureTemplateLoaded() {
+      if (!templateImg) templateImg = await loadImg(TEMPLATE_SRC);
 
-  const url = URL.createObjectURL(f);
-  photoImg = await loadImg(url);
+      // ✅ 讓畫布尺寸跟 template.png 一樣，避免拉伸造成跑位
+      W = templateImg.naturalWidth;
+      H = templateImg.naturalHeight;
+      canvas.width = W;
+      canvas.height = H;
+    }
 
-  // ✅ 拍完立刻生成並跳下載
-  await renderAndPrepareDownload();
-});
-    
-async function renderAndPrepareDownload() {
-  if (!photoImg) return;
-  if (!templateImg) templateImg = await loadImg(TEMPLATE_SRC);
+    async function renderCard() {
+      if (!photoSource) return;
+      await ensureTemplateLoaded();
 
-  ctx.clearRect(0, 0, W, H);
+      ctx.clearRect(0, 0, W, H);
 
-  // 先畫模板、再畫照片（你目前已改成這個順序）
-  ctx.drawImage(templateImg, 0, 0, W, H);
-  drawCover(photoImg, PHOTO_RECT);
+      // 1) 先畫模板
+      ctx.drawImage(templateImg, 0, 0, W, H);
 
-  // 匯出
-  const blob = await new Promise(r => canvas.toBlob(r, 'image/png', 1.0));
-  const outUrl = URL.createObjectURL(blob);
+      // 2) 再把照片放進白色內框（矩形範圍）
+      drawCover(photoSource, PHOTO_RECT);
 
-  dl.href = outUrl;
-  dl.style.display = 'inline-block';
-
-  // ✅ 直接觸發下載（不必再按一次）
-  dl.click();
-}
-
-    btn.addEventListener('click', async ()=>{
-      if(!photoImg) { alert('請先拍照/選照片'); return; }
-      if(!templateImg) templateImg = await loadImg(TEMPLATE_SRC);
-
-      // 背景先清掉
-      ctx.clearRect(0,0,W,H);
-
-       // ✅ 1) 先畫模板
-  ctx.drawImage(templateImg, 0, 0, W, H);
-
-  // ✅ 2) 再畫照片（避免被白色相紙蓋住）
-  drawCover(photoImg, PHOTO_RECT);
-
-      // 3) 匯出
-      const blob = await new Promise(r=>canvas.toBlob(r,'image/png',1.0));
+      // 3) 匯出（不自動下載，只顯示下載按鈕）
+      const blob = await new Promise((r) => canvas.toBlob(r, "image/png", 1.0));
       const outUrl = URL.createObjectURL(blob);
+
       dl.href = outUrl;
-      dl.style.display = 'inline-block';
+      dl.download = "card.png";
+      dl.style.display = "inline-flex";
+    }
+
+    fileEl.addEventListener("change", async (e) => {
+      const f = e.target.files?.[0];
+      if (!f) return;
+
+      // ✅ 優先用 createImageBitmap 處理 iPhone EXIF 方向（避免你說的「跑掉」感）
+      if (window.createImageBitmap) {
+        try {
+          photoSource = await createImageBitmap(f, { imageOrientation: "from-image" });
+        } catch {
+          // fallback：用 <img>
+          const url = URL.createObjectURL(f);
+          photoSource = await loadImg(url);
+        }
+      } else {
+        const url = URL.createObjectURL(f);
+        photoSource = await loadImg(url);
+      }
+
+      btn.disabled = false;
+
+      // 你想「選完就直接生成」（但不自動下載）：這裡直接生成
+      await renderCard();
+    });
+
+    // 若你想保留按鈕手動重生成（例如換 PHOTO_RECT 後重做）
+    btn.addEventListener("click", async () => {
+      if (!photoSource) { alert("請先拍照/選照片"); return; }
+      await renderCard();
     });
   </script>
 </body>
 </html>
-
 
 
 
