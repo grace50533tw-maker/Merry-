@@ -30,11 +30,23 @@
 
     // ✅ 這裡就是「右邊相框」的位置（你要依你的設計調整）
     // 例：相片貼在右邊的框內（x,y,w,h）
-   const PHOTO_RECT = {
-  x: 110,
-  y: 250,
-  w: 560,
-  h: 1080
+
+    
+ctx.strokeStyle = "red";
+ctx.lineWidth = 6;
+ctx.strokeRect(
+  PHOTO_RECT.x,
+  PHOTO_RECT.y,
+  PHOTO_RECT.w,
+  PHOTO_RECT.h
+);
+
+    
+const PHOTO_RECT = {
+  x: 140,
+  y: 360,
+  w: 480,
+  h: 820
 }; // <-- 先用示例值
 
     const fileEl = document.getElementById('file');
@@ -96,6 +108,7 @@
   </script>
 </body>
 </html>
+
 
 
 
