@@ -84,8 +84,12 @@
 
     // ✅ 你這張綠底模板（1080×1350）「白色內框」區域（保守版）
     // 若你換了模板，通常只要改這四個數字
-    const PHOTO_RECT = { x: 205, y: 391, w: 674, h: 550 };
-
+  const PHOTO_RECT = {
+  x: 235,
+  y: 410,
+  w: 610,
+  h: 470
+};
     const fileEl = document.getElementById("file");
     const btn = document.getElementById("make");
     const dl = document.getElementById("dl");
@@ -131,26 +135,39 @@
       canvas.height = H;
     }
 
-    async function renderCard() {
-      if (!photoSource) return;
-      await ensureTemplateLoaded();
+ async function renderCard() {
+  if (!photoSource) return;
+  await ensureTemplateLoaded();
 
-      ctx.clearRect(0, 0, W, H);
+  ctx.clearRect(0, 0, W, H);
 
-      // 1) 先畫模板
-      ctx.drawImage(templateImg, 0, 0, W, H);
+  // 1) 先畫整張模板（背景 + 白色框 + 裝飾）
+  ctx.drawImage(templateImg, 0, 0, W, H);
 
-      // 2) 再把照片放進白色內框（矩形範圍）
-      drawCover(photoSource, PHOTO_RECT);
+  // 2) 只在白色內框區域畫照片（關鍵）
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(
+    PHOTO_RECT.x,
+    PHOTO_RECT.y,
+    PHOTO_RECT.w,
+    PHOTO_RECT.h
+  );
+  ctx.clip();
 
-      // 3) 匯出（不自動下載，只顯示下載按鈕）
-      const blob = await new Promise((r) => canvas.toBlob(r, "image/png", 1.0));
-      const outUrl = URL.createObjectURL(blob);
+  drawCover(photoSource, PHOTO_RECT);
 
-      dl.href = outUrl;
-      dl.download = "card.png";
-      dl.style.display = "inline-flex";
-    }
+  ctx.restore();
+
+  // 3) 匯出（不自動下載，只顯示下載按鈕）
+  const blob = await new Promise(r => canvas.toBlob(r, "image/png", 1.0));
+  const outUrl = URL.createObjectURL(blob);
+
+  dl.href = outUrl;
+  dl.download = "card.png";
+  dl.style.display = "inline-flex";
+}
+
 
     fileEl.addEventListener("change", async (e) => {
       const f = e.target.files?.[0];
@@ -184,6 +201,7 @@
   </script>
 </body>
 </html>
+
 
 
 
